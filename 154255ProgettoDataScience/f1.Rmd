@@ -1,0 +1,262 @@
+---
+title: "Progetto di Fondamenti di Scienze dei Dati e lab."
+author: "Tavano Matteo"
+date: "27/9/2023"
+output:
+  ioslides_presentation:
+    incremental: yes
+  beamer_presentation:
+    incremental: yes
+subtitle: L'importanza delle vittorie e delle pole position nella storia della F1
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE, eval=TRUE, echo=FALSE)
+```
+
+
+```{r message=FALSE, warning=FALSE}
+library(readr)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(scales)
+library(ggplot2)
+library(ggthemes)
+library(waffle)
+```
+
+## Parte 1 
+
+- Nella storia della Formula 1 la costanza è stata più importante delle vittorie?
+
+- Per rispondere a questa prima domanda conteremo quante volte un pilota ha vinto un titolo di F1 senza ottenere il maggior numero di vittorie.
+
+- Ma prima, ci chiediamo quante volte sia successo questo in 73 stagioni di F1.
+
+## First plot
+
+```{r eval=TRUE, echo=FALSE}
+raceList = read_csv("csv/races.csv") %>%
+  select(raceId, year, name)
+
+driverNames = read_csv("csv/drivers.csv") %>%
+  select(driverId, forename, surname) %>%
+  unite(driverName, forename, c(forename, surname)) %>%
+  mutate(driverName = str_replace(driverName, "_", " "))
+
+constructorNames = read_csv("csv/constructors.csv") %>%
+  select(constructorId, name) %>%
+  rename(constructorName = name)
+
+driverStandings = read_csv("csv/driver_standings.csv") %>%
+  mutate(raceYear = raceList$year[match(as.matrix(raceId), raceList$raceId)],
+         raceName = raceList$name[match(as.matrix(raceId), raceList$raceId)],
+         driverName = driverNames$driverName[match(as.matrix(driverId), driverNames$driverId)])
+
+mostWins = driverStandings %>%
+  group_by(raceYear) %>%
+  filter(wins == max(wins)) %>%
+  filter(points == max(points)) %>%
+  select(raceYear, points, wins) %>%
+  distinct()
+
+mostPoints = driverStandings %>%
+  group_by(raceYear) %>%
+  filter(points == max(points)) %>%
+  filter(wins == max(wins)) %>%
+  select(raceYear, points, wins) %>%
+  distinct()
+
+winsPointsComparison = left_join(mostWins, mostPoints, by = "raceYear") %>%
+  mutate(type = ifelse(points.x == points.y, "mostWins", "mostPoints")) %>%
+  filter(raceYear != 2021) %>%
+  ungroup() %>%
+  count(type) %>%
+  rename(occurrence = n)
+
+vals <- winsPointsComparison$occurrence
+val_names <- sprintf("%s - %s (%s)", winsPointsComparison$type, winsPointsComparison$occurrence, scales::percent(round(winsPointsComparison$occurrence/sum(winsPointsComparison$occurrence), 3)))
+names(vals) <- val_names
+
+
+waffle::waffle(vals, size = 1, rows = 5, 
+title = "Confronto delle stagioni vinte con e senza \n il maggior numero di vittorie", xlab = "1 quadratino = 1 stagione", colors = tableau_color_pal(palette = "Tableau 20", type = "regular")(length(vals)))
+```
+
+## Second plot
+
+```{r eval=TRUE, echo=FALSE}
+winsPointsComparison = setdiff(mostWins, mostPoints) %>%
+  union(setdiff(mostPoints, mostWins)) %>%
+  filter(raceYear != 2023) %>%
+  arrange(raceYear) %>%
+  mutate(category = ifelse(row_number() %% 2 == 0, "mostPoints", "mostWins")) %>%
+  pivot_longer(c(points, wins), names_to = "type", values_to = "value") %>%
+  mutate(label = paste(raceYear, type, sep = " / ")) %>%
+  ungroup() %>%
+  add_row(raceYear = 0, category = "mostPoints", type = "wins", value = 0, label = "1964") %>%
+  add_row(raceYear = 0, category = "mostPoints", type = "wins", value = 0, label = "1967") %>%
+  add_row(raceYear = 0, category = "mostPoints", type = "wins", value = 0, label = "1977") %>%
+  add_row(raceYear = 0, category = "mostPoints", type = "wins", value = 0, label = "1979") %>%
+  add_row(raceYear = 0, category = "mostPoints", type = "wins", value = 0, label = "1982") %>%
+  add_row(raceYear = 0, category = "mostPoints", type = "wins", value = 0, label = "1983") %>%
+  add_row(raceYear = 0, category = "mostPoints", type = "wins", value = 0, label = "1984") %>%
+  add_row(raceYear = 0, category = "mostPoints", type = "wins", value = 0, label = "1986") %>%
+  add_row(raceYear = 0, category = "mostPoints", type = "wins", value = 0, label = "1987") %>%
+  add_row(raceYear = 0, category = "mostPoints", type = "wins", value = 0, label = "1989") %>%
+  add_row(raceYear = 0, category = "mostPoints", type = "wins", value = 0, label = "2008") %>%
+  add_row(raceYear = 0, category = "mostPoints", type = "wins", value = 0, label = "2016")
+  
+brks <- c(0, 0.25, 0.5, 0.75, 1)
+
+ggplot(winsPointsComparison, aes(fill=category, y = value, x = label)) + 
+  labs(title = "Analisi delle 13 stagioni vinte senza il maggior numero di vittorie",
+       fill = "Categorie",
+       y = "Percentuale") +
+  geom_bar(stat='identity', width=.8, position="fill") + labs(x='Anno/Tipo') +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position = "bottom") +
+  scale_y_continuous(breaks = brks, labels = scales::percent(brks)) +
+  geom_text(aes(label = ifelse(value == 0, "", value)),
+            position = position_fill(vjust = 0.5),
+            angle = 90)
+```
+
+## Fun fact 1
+
+
+- Nella stagione del 1984, ci fu un duello memorabile tra i piloti della McLaren Alain Prost e Niki Lauda.
+
+- Prost ha vinto sette gare contro le cinque di Lauda, comprese le ultime due gare della stagione, ma alla fine Lauda    ha avuto la meglio per mezzo punto; il margine più piccolo nella storia della Formula Uno.
+
+- Era il terzo titolo di Lauda, il primo dopo il 1977.
+
+- La McLaren vinse il Campionato Costruttori dopo ben 10 anni.
+
+## Conclusione 1
+
+- Vincere nella F1 è generalmente importante perché l'82% delle volte ottenere il maggior numero di vittorie ha portato   alla vittoria del titolo.
+
+- Infatti, in media vincere un titolo senza aver ottenuto il maggior numero di vittorie avviene solo 1 volta ogni 5       stagioni e mezzo.
+
+## Parte 2
+
+- Se vincere è così importante in F1, quanto è importante partire davanti alla griglia per salire sul gradino più alto   del podio?
+
+- Per rispondere a questa seconda domanda conteremo le vittorie in base alla posizione iniziale di partenza.
+
+- Qual è la percentuale di vittorie che ci aspettiamo partendo dalla pole position?
+
+## First plot
+
+```{r eval=TRUE, echo=FALSE}
+results = read_csv("csv/results.csv") %>%
+  mutate(number = ifelse(is.na(number), 0, number)) %>%
+  mutate(raceYear = raceList$year[match(as.matrix(raceId), raceList$raceId)],
+         raceName = raceList$name[match(as.matrix(raceId), raceList$raceId)],
+         driverName = driverNames$driverName[match(as.matrix(driverId), driverNames$driverId)],
+         constructorName = constructorNames$constructorName[match(as.matrix(constructorId), constructorNames$constructorId)]) %>%
+  arrange(raceYear)
+
+gridToWin = results %>%
+  filter(1 == position) %>%
+  count(grid) %>%
+  rename(occurrence = n)
+vals <- gridToWin$occurrence
+val_names <- sprintf("%s - %s (%s)", gridToWin$grid, gridToWin$occurrence, scales::percent(round(gridToWin$occurrence/sum(gridToWin$occurrence), 3)))
+names(vals) <- val_names
+
+waffle::waffle(vals, size = 1, rows = 25, title = "Vittorie basate sulle partenze in testa", xlab = "1 quadratino, 1 gara", colors = tableau_color_pal(palette = "Tableau 20", type = "regular")(length(vals)))
+```
+
+## Second plot
+
+```{r eval=TRUE, echo=FALSE}
+gridToWinByYear = results %>%
+  filter(1 == position) %>%
+  group_by(raceYear) %>%
+  count(grid) %>%
+  rename(occurrence = n) %>%
+  mutate(grid = as.character(grid)) %>%
+  mutate(grid = ifelse(nchar(grid) == 1, paste0(0, grid), grid))
+
+gridToWin2 = gridToWin %>%
+  mutate(grid = as.character(grid)) %>%
+  mutate(grid = ifelse(nchar(grid) == 1, paste0(0, grid), grid)) %>%
+  mutate(raceYear = 2023, .before = grid)
+  
+gridToWin3 = bind_rows(gridToWinByYear, gridToWin2)
+
+ggplot(gridToWin3, aes(fill = grid, y = occurrence, x = raceYear)) + 
+  labs(title = "Vittorie basate sulle partenze in testa per ogni anno\n ~ L'ultima barra rappresenta la media ~",
+       fill = "grid",
+       y = "Percentuale",
+       x = "Anno") +
+  geom_bar(stat='identity', width=1, position = "fill") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position = "bottom") +
+  scale_y_continuous(breaks = brks, labels = scales::percent(brks)) +
+  scale_fill_manual(values=c("#4e79a7", "#a0cbe8", "#499894", "#86bcb6", "#59a14f", "#8cd17d", "#b6992d", "#f1ce63", "#f28e2b", "#ffbe7d", "#e15759", "#ff9d9a", "#d37295", "#bab0ac", "#b07aa1", "#fabfd2", "#79706e", "#d4a6c8", "#9d7660", "#d7b5a6"))
+```
+
+```{r eval=TRUE, echo=FALSE}
+ff2 = results %>%
+  filter(grid == 22) %>%
+  filter(position == 1) %>%
+  select(raceYear, raceName, driverName, constructorName)
+```
+
+## Fun fact 2
+
+- Il record per la vittoria nella F1 conseguita dopo la partenza più arretrata nella griglia, spetta 
+  a `r ff2$driverName`, partito 22esimo nella `r ff2$raceName` del `r ff2$raceYear`, con `r ff2$constructorName`.
+
+- Conseguì così il suo quinto ed ultimo titolo nel mondiale.
+
+- Il suo compagno di squadra, Niki Lauda, che arrivò secondo, partì invece dalla 23esima posizione.
+
+
+## Conclusione 2
+
+- Nella storia della F1 la partenza dalla pole è stata solitamente molto importante poiché in media ha portato a oltre  il 40% delle vittorie.
+
+- Il secondo posto, invece, ha portato a quasi ¼ delle vittorie e il terzo solo a circa ⅛ delle vittorie.
+
+- Sotto il terzo posto le percentuali scendono sotto il 10%.
+
+## Parte 3
+
+- Ora che sappiamo come è correlata la posizione di partenza alla probabilità di ottenere una vittoria, quanto sono      diverse le percentuali a Monaco, che è un classico circuito cittadino che di solito non offre molti sorpassi?
+
+- Per rispondere a questa domanda finale utilizzeremo lo stesso processo di prima ma concentrandoci sulla differenza     tra la media di tutti i circuiti e il GP di Monaco.
+
+- Qual è la percentuale di vittorie che vi aspettate questa volta partendo dalla pole position ricordando che in         media è del 42,50%?
+
+## Plot
+
+```{r eval=TRUE, echo=FALSE}
+gridToWinInMonaco = results %>%
+  filter(1 == position, "Monaco Grand Prix" == raceName) %>%
+  select(grid, position) %>%
+  count(grid) %>%
+  rename(occurrence = n)
+
+vals <- gridToWinInMonaco$occurrence
+val_names <- sprintf("%s (%s)", gridToWinInMonaco$grid, scales::percent(round(gridToWinInMonaco$occurrence/sum(gridToWinInMonaco$occurrence), 3)))
+names(vals) <- val_names
+
+waffle(vals, colors = tableau_color_pal()(length(vals)), rows = 5, title = "Vittorie basate sulle partenze in testa \n relativamente al GP di Monaco", xlab = "1 quadratino, 1 gara")
+```
+
+
+
+## Conclusione 3
+
+- La differenza tra tutti i circuiti e solo Monaco non è molto significativa. (42.50% vs 44.9%)
+
+- La differenza percentuale a partire dalla pole position è solo circa del 3% e anche le altre posizioni sono molto      simili.
+
+- In conclusione possiamo dire che in F1 le grandi rimonte che portano alla vittoria non sono molto comuni né sui        circuiti veri né su quelli cittadini, con solo una piccola differenza tra questi.
+
+
